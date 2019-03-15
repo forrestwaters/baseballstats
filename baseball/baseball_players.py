@@ -110,7 +110,9 @@ def get_teams(html):
         for entry in html.find(attrs={'id': 'all_teams_active'}).find('tbody').find_all('td'):
             if entry.find('a') is not None:
                 if len(entry.text.split(',')) > 1:
-                    teams[entry.find('a').get('href').split('/')[2]] = entry.text.split(',')[1].replace('see ','').strip(' ').replace(' ', '-').lower()
+                    teams[entry.find('a').get('href').split('/')[2]] = entry.text.split(',')[1].replace('see ',
+                                                                                                        '').strip(
+                        ' ').replace(' ', '-').lower()
                 else:
                     teams[entry.find('a').get('href').split('/')[2]] = entry.text.replace(' ', '-').lower()
         return teams
@@ -151,7 +153,8 @@ def get_batter_career_stats(player, s):
     stats['name'] = player.name
     stats['br_name'] = player.br_name
     stats['position'] = player.position
-    for v in soup.find('tfoot').find_all('td'):
+    # find the first tr footer for cases where 162 game average is calculated
+    for v in soup.find('tfoot').find('tr').find_all('td'):
         if v.text is not '':
             if v['data-stat'] == '2B':
                 stats['doubles'] = float(v.text)
@@ -187,21 +190,22 @@ def populate_teams_table(s):
 if __name__ == '__main__':
     session = setup_sql_session(DB_NAME)
     populate_teams_table(session)
-#    for team in session.query(Team).all():
-#        if team.abbr == 'ANA':
-#            tabbr = 'LAA'
-#        elif team.abbr == 'FLA':
-#            tabbr = 'MIA'
-#        elif team.abbr == 'TBD':
-#            tabbr = 'TBR'
-#        else:
-            # BR is dumb and has names intertwined
-            # will have to figure out how to be smarter about this
-#            tabbr = team.abbr
-#        populate_players_table(session, fetch_html(BR + 'teams/{}/2018.shtml'.format(tabbr)), tabbr)
+    #    for team in session.query(Team).all():
+    #        if team.abbr == 'ANA':
+    #            tabbr = 'LAA'
+    #        elif team.abbr == 'FLA':
+    #            tabbr = 'MIA'
+    #        elif team.abbr == 'TBD':
+    #            tabbr = 'TBR'
+    #        else:
+    # BR is dumb and has names intertwined
+    # will have to figure out how to be smarter about this
+    #            tabbr = team.abbr
+    #        populate_players_table(session, fetch_html(BR + 'teams/{}/2018.shtml'.format(tabbr)), tabbr)
     for p in session.query(Player).all():
         if p.position == 'P':
-            get_pitcher_career_stats()
+            #get_pitcher_career_stats()
+            continue
         else:
             get_batter_career_stats(p, session)
     session.commit()
