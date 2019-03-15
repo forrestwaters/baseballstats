@@ -1,21 +1,8 @@
 import requests
 from bs4 import BeautifulSoup
+from baseball.baseball_players import fetch_html
 
 LINEUPS = "https://www.mlb.com/starting-lineups"
-
-
-def fetch_html(url):
-    """
-    :param url: any url to parse
-    :return: returns a BeautifulSoup object if a 200 response is seen
-    """
-    with requests.get(url) as r:
-        if r.status_code == 200:
-            return BeautifulSoup(r.text, 'lxml')
-        else:
-            print('Received a non-200 response.')
-            print('Status code: %'.format(r.status_code))
-            return None
 
 
 class Matchup:
@@ -53,5 +40,6 @@ class Matchup:
                 self.away_team: {'SP': self.away_pitcher, 'lineup': self.away_lineup}}
 
 
-for matchup_soup in fetch_html(LINEUPS).select('.starting-lineups__matchup'):
-    print(Matchup(matchup_soup).return_matchup_info())
+def get_todays_matchups():
+    for matchup_soup in fetch_html(LINEUPS).select('.starting-lineups__matchup'):
+        print(Matchup(matchup_soup).return_matchup_info())
