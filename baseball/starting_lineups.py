@@ -1,45 +1,49 @@
-import requests
-from bs4 import BeautifulSoup
 from baseball.baseball_players import fetch_html
-
-LINEUPS = "https://www.mlb.com/starting-lineups"
 
 
 class Matchup:
     def __init__(self, soup):
         self.soup = soup
-        self.home_team = ''
-        self.away_team = ''
-        self.home_pitcher = ''
-        self.away_pitcher = ''
-        self.home_lineup = list()
-        self.away_lineup = list()
 
     def get_teams(self):
-        self.away_team = self.soup.select('.starting-lineups__game .starting-lineups__team-name--link')[0][
-            'data-tri-code']
-        self.home_team = self.soup.select('.starting-lineups__game .starting-lineups__team-name--link')[1][
-            'data-tri-code']
+        """
+        :return:  tuple of team abbr's (away, home)
+        """
+        return (self.soup.select('.starting-lineups__game .starting-lineups__team-name--link')[0]['data-tri-code'],
+                self.soup.select('.starting-lineups__game .starting-lineups__team-name--link')[1]['data-tri-code'])
 
     def get_pitchers(self):
         p = self.soup.select('.starting-lineups__pitchers')[0].select('.starting-lineups__pitcher-name')
-        self.away_pitcher = p[0].text.strip('\n')
-        self.home_pitcher = p[1].text.strip('\n')
+        return p[0].text.strip('\n'), p[1].text.strip('\n')
 
     def get_lineups(self):
-        away_soup = self.soup.find(attrs={'class': 'starting-lineups__team starting-lineups__team--away'})
+        """
+
+        :return: tuple - first object is away lineup, second is home lineup
+        """
         home_soup = self.soup.find(attrs={'class': 'starting-lineups__team starting-lineups__team--home'})
-        self.home_lineup = [player.text for player in home_soup.select('.starting-lineups__player')]
-        self.away_lineup = [player.text for player in away_soup.select('.starting-lineups__player')]
+        away_soup = self.soup.find(attrs={'class': 'starting-lineups__team starting-lineups__team--away'})
+        return ([player.text for player in away_soup.select('.starting-lineups__player')],
+                [player.text for player in home_soup.select('.starting-lineups__player')])
 
     def return_matchup_info(self):
-        self.get_teams()
-        self.get_pitchers()
-        self.get_lineups()
-        return {self.home_team: {'SP': self.home_pitcher, 'lineup': self.home_lineup},
-                self.away_team: {'SP': self.away_pitcher, 'lineup': self.away_lineup}}
+        """
+        Runs all important class methods
+        :return: returns dictionary containing game info
+        """
+        teams = self.get_teams()
+        pitchers = self.get_pitchers()
+        lineups = self.get_lineups()
+        return {teams[0]: {'SP': pitchers[0], 'lineup': lineups[0]},
+                teams[1]: {'SP': pitchers[1], 'lineup': lineups[1]}}
 
 
 def get_todays_matchups():
-    for matchup_soup in fetch_html(LINEUPS).select('.starting-lineups__matchup'):
-        print(Matchup(matchup_soup).return_matchup_info())
+    daily_matchups = []
+    for matchup_soup in fetch_html("https://www.mlb.com/starting-lineups").select('.starting-lineups__matchup'):
+        m = Matchup(matchup_soup)
+        daily_matchups.append(m.return_matchup_info())
+    return daily_matchups
+
+
+print(get_todays_matchups())

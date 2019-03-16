@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 from sqlalchemy import create_engine, Column, Integer, Float, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from time import sleep
 from queue import Queue
 from threading import Thread
 
@@ -31,13 +32,14 @@ class Team(Base):
 class Player(Base):
     __tablename__ = 'players'
     br_name = Column('br_name', String, primary_key=True)
+    fg_id = Column('fg_id', String)
     name = Column('name', String)
     href = Column('href', String)
     position = Column('position', String)
     age = Column('age', Integer)
     team = Column('team', String)
 
-    def __init__(self, br_name, href, name, position, team):
+    def __init__(self, br_name, fg_id, href, name, position, team):
         """
         :param br_name: baseball reference unique identifier that can be used for pulling
                         more stats for this specific player
@@ -48,6 +50,7 @@ class Player(Base):
         :param team: Players current team
         """
         self.br_name = br_name
+        self.fg_id = fg_id
         self.href = href
         self.name = name
         self.position = position
@@ -96,8 +99,22 @@ def fetch_html(url):
             return BeautifulSoup(r.text, 'lxml')
         else:
             print('Received a non-200 response.')
-            print('Status code: %'.format(r.status_code))
+            print('Status code: {}'.format(r.status_code))
             return None
+
+
+def get_fg_ids():
+    fgp = dict()
+    for link in fetch_html('https://www.fangraphs.com/players.aspx').select('.s_name a'):
+        if link is not None:
+            h = fetch_html('https://www.fangraphs.com/' + link['href'])
+            print(link['href'])
+            if h is not None:
+                for entry in h.select('.search table'):
+                    for player in entry.find_all('tr'):
+                        fgp[player.find('a').text] = player.find('a')['href'].split('=')[1].rstrip('&position')
+                    sleep(1)
+    return fgp
 
 
 def get_teams(html):
@@ -118,7 +135,7 @@ def get_teams(html):
         return teams
 
 
-def populate_players_table(s, html, team):
+def populate_players_table(s, html, team, fg_ids):
     """
     :param s: sqlalchemy session
     :param html: BeautifulSoup object from players page
@@ -136,8 +153,8 @@ def populate_players_table(s, html, team):
         position = players[count].text
         count += 1
         if not s.query(s.query(Player).filter_by(br_name=players[count]['data-append-csv']).exists()).scalar():
-            s.add(Player(players[count]['data-append-csv'], players[count].find('a')['href'],
-                         players[count].find('a').text, position, team))
+            s.add(Player(players[count]['data-append-csv'], fg_ids.get(players[count].find('a').text),
+                         players[count].find('a')['href'], players[count].find('a').text, position, team))
         count += 1
 
 
@@ -190,23 +207,26 @@ def populate_teams_table(s):
 if __name__ == '__main__':
     session = setup_sql_session(DB_NAME)
     populate_teams_table(session)
-    #    for team in session.query(Team).all():
-    #        if team.abbr == 'ANA':
-    #            tabbr = 'LAA'
-    #        elif team.abbr == 'FLA':
-    #            tabbr = 'MIA'
-    #        elif team.abbr == 'TBD':
-    #            tabbr = 'TBR'
-    #        else:
-    # BR is dumb and has names intertwined
-    # will have to figure out how to be smarter about this
-    #            tabbr = team.abbr
-    #        populate_players_table(session, fetch_html(BR + 'teams/{}/2018.shtml'.format(tabbr)), tabbr)
-    for p in session.query(Player).all():
-        if p.position == 'P':
-            #get_pitcher_career_stats()
-            continue
+    fg_ids = get_fg_ids()
+    with open('fgids.csv', 'w') as f:
+        f.write(str(fg_ids))
+    for team in session.query(Team).all():
+        if team.abbr == 'ANA':
+            tabbr = 'LAA'
+        elif team.abbr == 'FLA':
+            tabbr = 'MIA'
+        elif team.abbr == 'TBD':
+            tabbr = 'TBR'
         else:
-            get_batter_career_stats(p, session)
+            # BR is dumb and has names intertwined
+            # will have to figure out how to be smarter about this
+            tabbr = team.abbr
+        populate_players_table(session, fetch_html(BR + 'teams/{}/2018.shtml'.format(tabbr)), tabbr, fg_ids)
+#    for p in session.query(Player).all():
+#        if p.position == 'P':
+#            # get_pitcher_career_stats()
+#            continue
+#        else:
+#            get_batter_career_stats(p, session)
     session.commit()
     session.close()
