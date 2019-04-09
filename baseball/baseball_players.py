@@ -4,8 +4,8 @@ from sqlalchemy import create_engine, Column, Integer, Float, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from time import sleep
-from queue import Queue
-from threading import Thread
+from baseball.database_helpers import Team, Player, CareerStats
+from baseball.database_helpers import Base
 
 ''' things to look for
  * batter vs pitcher hand
@@ -14,79 +14,7 @@ from threading import Thread
 '''
 
 BR = 'https://www.baseball-reference.com/'
-Base = declarative_base()
 DB_NAME = 'baseball_stats.db'
-
-
-class Team(Base):
-    """
-    Args:
-        Base: sqlalchemy declarative_base https://docs.sqlalchemy.org/en/latest/orm/extensions/declarative/basic_use.html
-    """
-    __tablename__ = 'teams'
-    id = Column(Integer, primary_key=True)
-    team_name = Column(String)
-    abbr = Column(String)
-
-
-class Player(Base):
-    __tablename__ = 'players'
-    br_name = Column('br_name', String, primary_key=True)
-    fg_id = Column('fg_id', String)
-    name = Column('name', String)
-    href = Column('href', String)
-    position = Column('position', String)
-    age = Column('age', Integer)
-    team = Column('team', String)
-
-    def __init__(self, br_name, fg_id, href, name, position, team):
-        """
-        :param br_name: baseball reference unique identifier that can be used for pulling
-                        more stats for this specific player
-        :param href: url for the specific players page
-        :param name: Name of player
-        :param position: Players position
-        :param age: Players age
-        :param team: Players current team
-        """
-        self.br_name = br_name
-        self.fg_id = fg_id
-        self.href = href
-        self.name = name
-        self.position = position
-        self.team = team
-        self.stats = None
-
-
-class CareerStats(Base):
-    __tablename__ = 'battercareerstats'
-    br_name = Column('br_name', String, primary_key=True)
-    name = Column('name', String)
-    position = Column('position', String)
-    G = Column(Integer)
-    PA = Column(Integer)
-    AB = Column(Integer)
-    R = Column(Integer)
-    H = Column(Integer)
-    doubles = Column(Integer)
-    triples = Column(Integer)
-    HR = Column(Integer)
-    RBI = Column(Integer)
-    SB = Column(Integer)
-    CS = Column(Integer)
-    BB = Column(Integer)
-    SO = Column(Integer)
-    TB = Column(Integer)
-    GIDP = Column(Integer)
-    HBP = Column(Integer)
-    SH = Column(Integer)
-    SF = Column(Integer)
-    IBB = Column(Integer)
-    batting_avg = Column(Float)
-    onbase_perc = Column(Float)
-    slugging_perc = Column(Float)
-    onbase_plus_slugging = Column(Float)
-    onbase_plus_slugging_plus = Column(Float)
 
 
 def fetch_html(url):
@@ -140,6 +68,7 @@ def populate_players_table(s, html, team, fg_ids):
     :param s: sqlalchemy session
     :param html: BeautifulSoup object from players page
     :param team: team name passed in constructor because it's not in player row
+    :param fg_ids: fangraph player ids
     :return:
 
     p['data-append-csv']
@@ -160,7 +89,6 @@ def populate_players_table(s, html, team, fg_ids):
 
 def get_batter_career_stats(player, s):
     """
-
     :param player: Player() class object fetched from database
     :param s: sqlalchemy session
     :return: static method that adds the players stats dict to the session
@@ -182,13 +110,14 @@ def get_batter_career_stats(player, s):
     s.add(CareerStats(**stats))
 
 
-def setup_sql_session(dbname):
+def setup_sql_session(dbname, base):
     """
     :param dbname: sqlite database name to write to
+    :param base: sqlalchemy declarative_base https://docs.sqlalchemy.org/en/latest/orm/extensions/declarative/basic_use.html
     :return: sqlalchemy session that can be used easily
     """
     db = create_engine('sqlite:///{}'.format(dbname))
-    Base.metadata.create_all(db)
+    base.metadata.create_all(db)
     s = sessionmaker()
     s.configure(bind=db)
     return s()
@@ -205,11 +134,8 @@ def populate_teams_table(s):
 
 
 if __name__ == '__main__':
-    session = setup_sql_session(DB_NAME)
+    session = setup_sql_session(DB_NAME, Base)
     populate_teams_table(session)
-    fg_ids = get_fg_ids()
-    with open('fgids.csv', 'w') as f:
-        f.write(str(fg_ids))
     for team in session.query(Team).all():
         if team.abbr == 'ANA':
             tabbr = 'LAA'
@@ -221,7 +147,7 @@ if __name__ == '__main__':
             # BR is dumb and has names intertwined
             # will have to figure out how to be smarter about this
             tabbr = team.abbr
-        populate_players_table(session, fetch_html(BR + 'teams/{}/2018.shtml'.format(tabbr)), tabbr, fg_ids)
+        populate_players_table(session, fetch_html(BR + 'teams/{}/2018.shtml'.format(tabbr)), tabbr, get_fg_ids())
 #    for p in session.query(Player).all():
 #        if p.position == 'P':
 #            # get_pitcher_career_stats()

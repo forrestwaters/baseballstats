@@ -39,10 +39,10 @@ class Matchup:
 
 
 def get_todays_matchups():
-    daily_matchups = []
+    daily_matchups = set()
     for matchup_soup in fetch_html("https://www.mlb.com/starting-lineups").select('.starting-lineups__matchup'):
         m = Matchup(matchup_soup)
-        daily_matchups.append(m.return_matchup_info())
+        daily_matchups.add(m.return_matchup_info())
     return daily_matchups
 
 
